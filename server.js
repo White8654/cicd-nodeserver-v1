@@ -16,6 +16,10 @@ const {
   updateTableSchema,
   deleteTableSchema
 } = require("./tableRegistryController");
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+const { spawn } = require('child_process');
 
 
 const app = express();
@@ -28,11 +32,102 @@ app.use(cors({
 
 
 
+// Function to check SF CLI version
+async function checkSfCliVersion() {
+  try {
+      const { stdout, stderr } = await execPromise('sf -v');
+      if (stderr) {
+          throw new Error('Error checking SF CLI version');
+      }
+      return stdout.trim();
+  } catch (error) {
+      throw new Error('Salesforce CLI is not installed or accessible: ' + error.message);
+  }
+}
+app.post('/device-code', async (req, res) => {
+  try {
+      const { alias } = req.body;
+      
+      if (!alias) {
+          return res.status(400).json({ error: 'Alias is required' });
+      }
 
+      // First, check SF CLI version
+      const versionInfo = await checkSfCliVersion();
+      console.log('Salesforce CLI Version:', versionInfo);
 
+      // Start the SF CLI process
+      const childProcess = spawn('sf', ['org', 'login', 'device', '--instance-url', 'https://test.salesforce.com/', '--alias', alias]);
 
+      let output = '';
 
+      childProcess.stdout.on('data', (data) => {
+          output += data.toString();
+      });
 
+      childProcess.stderr.on('data', (data) => {
+          output += data.toString();
+      });
+
+      // Set timeout to kill the process after 5 seconds
+      setTimeout(() => {
+          if (!childProcess.killed) {
+              childProcess.kill();
+              console.log('Process killed after timeout');
+          }
+      }, 2000);
+
+      childProcess.on('close', () => {
+          //console.log('Raw output:', output); // For debugging
+
+          try {
+              // Extract device code and verification URL using plain string search
+              const deviceCodeIndex = output.indexOf('Enter') + 6; // Find "Enter" and move forward to capture code
+              const deviceCodeEnd = output.indexOf('device code');
+              const verificationUrlIndex = output.indexOf('URL:') + 5;
+
+              const deviceCode = output.substring(deviceCodeIndex, deviceCodeEnd).trim();
+              const verificationUrl = output.substring(verificationUrlIndex).split('\n')[0].trim();
+
+              // Validate extraction
+              if (deviceCode && verificationUrl) {
+                  return res.status(200).json({
+                      success: true,
+                      sfCliVersion: versionInfo,
+                      deviceCode,
+                      verificationUrl,
+                     
+                  });
+              } else {
+                  throw new Error('Device code or verification URL not found in the output');
+              }
+          } catch (error) {
+             // console.error('Error parsing output:', error);
+              res.status(500).json({
+                  success: false,
+                  error: 'Could not extract device code or verification URL',
+                  fullOutput: output
+              });
+          }
+      });
+
+      childProcess.on('error', (error) => {
+          res.status(500).json({
+              success: false,
+              error: error.message,
+              fullOutput: output
+          });
+      });
+
+  } catch (error) {
+      console.error('Error:', error);
+      res.status(500).json({
+          success: false,
+          error: error.message,
+          details: error.stderr || error.stdout
+      });
+  }
+});
 
 
 
@@ -206,6 +301,32 @@ app.get("/schemas", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+
+app.post('/get-device-code', (req, res) => {
+  const alias = req.body.alias;
+
+  if (!alias) {
+      return res.status(400).json({ error: 'Alias is required' });
+  }
+
+  // Command to generate the device code using Salesforce CLI
+  const command = `sf org login device --instance-url https://test.salesforce.com/ --alias ${alias}`;
+
+  exec(command, (error, stdout, stderr) => {
+      if (error) {
+          console.error(`Error executing command: ${stderr}`);
+          return res.status(500).json({ error: 'Failed to generate device code' });
+      }
+
+      // Process and return the response
+      res.json({ deviceCodeOutput: stdout.trim() });
+  });
+});
+
+
 
 
 

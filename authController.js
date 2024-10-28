@@ -1,7 +1,8 @@
 // authController.js
-
+const { exec } = require('child_process');
 // Function to handle authentication request
 const authenticateUser = async (alias) => {
+
     const fetch = (await import("node-fetch")).default; // Dynamic import of node-fetch
   
     const url = `https://2349-210-89-54-148.ngrok-free.app/api/v1/getauthtoken?url=https://test.salesforce.com&alias=${alias}`;

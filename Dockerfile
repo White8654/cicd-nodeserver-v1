@@ -6,9 +6,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Update and install necessary packages
 RUN apt-get update && \
-    apt-get install -y curl && \
+    apt-get install -y curl wget nodejs npm && \
     curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs && \
+    # Install Salesforce CLI
+    npm install --global @salesforce/cli && \
+    # Clean up
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -24,8 +27,7 @@ RUN npm install
 # Copy the rest of the application files
 COPY . .
 
-# Expose the port the app runs on (usually 3000 for Node.js apps)
+# Create a startup script
 EXPOSE 5000
-
 # Start the application
 CMD ["npm", "start"]
