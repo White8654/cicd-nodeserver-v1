@@ -122,7 +122,7 @@ const renameFieldInRegistrySchema = async (tableName, oldFieldName, newFieldName
 // Standalone API route to rename field in both items and schema
 
 app.get('/health', (req, res) => {
-  res.status(200).send('OK');
+  res.status(200).send('server ok hai bhai !!');
 });
 
 app.put("/rename-field", async (req, res) => {
